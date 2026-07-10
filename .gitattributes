@@ -1,0 +1,6 @@
+# シェルスクリプトと Python は常に LF（Linux で実行するため）
+*.sh   text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+.gitignore  text eol=lf
+.gitkeep    text eol=lf

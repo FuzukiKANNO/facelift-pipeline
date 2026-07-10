@@ -1,0 +1,18 @@
+# clone される外部リポジトリ（転送先の setup.sh で取得）
+/FaceLift/
+/face-parsing.PyTorch/
+
+# 生成物・大容量ファイル
+/facelift_input/
+/facelift_output/
+/segmented_output/
+*.ply
+*.pth
+*.mp4
+
+# 入力画像は各自配置（サンプルを置く場合は個別に -f で追加）
+/input/*.jpg
+/input/*.png
+
+__pycache__/
+*.pyc
