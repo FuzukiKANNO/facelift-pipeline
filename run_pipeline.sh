@@ -15,6 +15,25 @@ ENV_NAME="${FACELIFT_ENV:-facelift}"
 mkdir -p facelift_input facelift_output segmented_output
 cp -f input/face.jpg facelift_input/
 
+# ---- パッチ: xformers 呼び出しを無効化 --------------------------
+#   torch 2.11 に対応する xformers wheel が無いため。diffusers は
+#   自動で PyTorch 標準の SDPA にフォールバックする（性能ほぼ同等）。
+echo "[patch] FaceLift/inference.py の xformers 呼び出しを無効化..."
+python - <<'PY'
+p = "FaceLift/inference.py"
+s = open(p, encoding="utf-8").read()
+line = "diffusion_pipeline.unet.enable_xformers_memory_efficient_attention()"
+marker = "# [patched-no-xformers] "
+if marker in s:
+    print("  already patched")
+elif line in s:
+    s = s.replace(line, marker + line, 1)
+    open(p, "w", encoding="utf-8").write(s)
+    print("  patched: xformers 無効化")
+else:
+    print("  WARN: 対象行が見つかりません（FaceLift が更新された可能性）")
+PY
+
 # ---- 1. FaceLift 推論 -------------------------------------------
 echo "[1/3] FaceLift 推論..."
 cd FaceLift
