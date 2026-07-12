@@ -18,20 +18,25 @@ cp -f input/face.jpg facelift_input/
 # ---- パッチ: xformers 呼び出しを無効化 --------------------------
 #   torch 2.11 に対応する xformers wheel が無いため。diffusers は
 #   自動で PyTorch 標準の SDPA にフォールバックする（性能ほぼ同等）。
-echo "[patch] FaceLift/inference.py の xformers 呼び出しを無効化..."
+echo "[patch] FaceLift/inference.py の xformers を SDPA プロセッサへ差し替え..."
 python - <<'PY'
 p = "FaceLift/inference.py"
-s = open(p, encoding="utf-8").read()
-line = "diffusion_pipeline.unet.enable_xformers_memory_efficient_attention()"
-marker = "# [patched-no-xformers] "
-if marker in s:
-    print("  already patched")
-elif line in s:
-    s = s.replace(line, marker + line, 1)
-    open(p, "w", encoding="utf-8").write(s)
-    print("  patched: xformers 無効化")
+lines = open(p, encoding="utf-8").read().splitlines()
+out, done = [], False
+for ln in lines:
+    if ("enable_xformers_memory_efficient_attention()" in ln) and ("set_attn_processor" not in ln) and not done:
+        indent = ln[:len(ln) - len(ln.lstrip())]
+        # xformers ではなく PyTorch SDPA ベースの効率アテンションを使う
+        out.append(indent + "from diffusers.models.attention_processor import AttnProcessor2_0  # [patched-sdpa]")
+        out.append(indent + "diffusion_pipeline.unet.set_attn_processor(AttnProcessor2_0())")
+        done = True
+    else:
+        out.append(ln)
+if done:
+    open(p, "w", encoding="utf-8").write("\n".join(out) + "\n")
+    print("  patched: xformers → SDPA(AttnProcessor2_0)")
 else:
-    print("  WARN: 対象行が見つかりません（FaceLift が更新された可能性）")
+    print("  no change (already patched or line not found)")
 PY
 
 # ---- パッチ: GS-LRM の xformers 依存を SDPA に切替 ---------------
@@ -62,6 +67,8 @@ PY
 
 # ---- 1. FaceLift 推論 -------------------------------------------
 echo "[1/3] FaceLift 推論..."
+# メモリ断片化対策（OOM 回避のため）
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd FaceLift
 conda run -n "$ENV_NAME" python inference.py \
   --input_dir ../facelift_input/ \
