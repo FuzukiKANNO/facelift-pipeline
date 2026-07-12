@@ -3,7 +3,7 @@
 # check_env.sh  —  セットアップ結果の健全性チェック
 #   cd ~/facelift-pipeline && git pull && bash check_env.sh
 # ============================================================
-set -uo pipefail
+set -o pipefail   # 注: set -u は使わない（conda の activate スクリプトが未定義変数を参照するため）
 WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$WORKSPACE"
 ENV_NAME="${FACELIFT_ENV:-facelift}"

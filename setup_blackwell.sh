@@ -12,7 +12,7 @@
 #
 #   環境名を変えたい場合:  FACELIFT_ENV=myenv bash setup_blackwell.sh
 # ============================================================
-set -uo pipefail
+set -o pipefail   # 注: set -u は使わない（conda の activate スクリプトが未定義変数を参照するため）
 
 WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$WORKSPACE"
