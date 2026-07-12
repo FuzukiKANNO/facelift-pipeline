@@ -37,6 +37,34 @@ if [ ! -d "$RASTER_DIR/third_party/glm/glm" ]; then
   git -C "$RASTER_DIR" submodule update --init --recursive
 fi
 
+# --- パッチ: 新しい GCC(13+) 対策で <cstdint> を追加 ---
+#   古いコードが std::uintptr_t / uint32_t を <cstdint> なしで使い、
+#   新 GCC では "namespace std has no member uintptr_t" で落ちるため。
+banner "1b. <cstdint> パッチ適用（新GCC対策）"
+python - <<PY
+import os
+root = "$RASTER_DIR"
+targets = [
+    os.path.join(root, "cuda_rasterizer", "rasterizer_impl.h"),
+    os.path.join(root, "cuda_rasterizer", "rasterizer_impl.cu"),
+    os.path.join(root, "cuda_rasterizer", "forward.h"),
+    os.path.join(root, "cuda_rasterizer", "backward.h"),
+    os.path.join(root, "cuda_rasterizer", "auxiliary.h"),
+]
+for p in targets:
+    if not os.path.exists(p):
+        continue
+    s = open(p, encoding="utf-8").read()
+    if "#include <cstdint>" in s:
+        print("skip (already patched):", p); continue
+    if "#pragma once" in s:
+        s = s.replace("#pragma once", "#pragma once\n#include <cstdint>", 1)
+    else:
+        s = "#include <cstdint>\n" + s
+    open(p, "w", encoding="utf-8").write(s)
+    print("patched:", p)
+PY
+
 # RTX 5090 = sm_120 向けにビルド。詳細ログを出す（失敗時の原因特定用）
 export TORCH_CUDA_ARCH_LIST="12.0"
 # conda の cuda-toolkit を使う。CUDA_HOME 未設定なら conda 環境を指す
