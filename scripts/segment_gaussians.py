@@ -124,33 +124,39 @@ def project_gaussians_to_image(
     positions_xyz: np.ndarray,
     image_w: int,
     image_h: int,
-    flip_x: bool = False,
-    flip_y: bool = True,
+    h_axis: int = 0,
+    v_axis: int = 2,
+    flip_h: bool = False,
+    flip_v: bool = True,
 ) -> np.ndarray:
     """
-    Gaussian の XY 座標を画像座標に正射影する（簡易正投影）。
+    Gaussian を指定 2 軸で画像座標に正射影する（簡易正投影）。
     percentile で外れ値を除いた bbox に正規化する。
 
-    flip_y=True: 画像座標系（上が py=0）に合わせて Y を反転（既定）
-    flip_x=True: 左右ミラー
+    FaceLift 出力は「顔が XZ 平面・Y が奥行き」なので既定は
+    h_axis=0(X, 横) / v_axis=2(Z, 縦)。flip_v=True で頭を上に向ける。
+
+    h_axis, v_axis: 0=x, 1=y, 2=z
+    flip_h: 横方向を反転（左右ミラー）
+    flip_v: 縦方向を反転（画像座標系 py=0 が上）
 
     戻り値: shape (N, 2) の float32 配列（画像ピクセル座標）
     """
-    xs = positions_xyz[:, 0]
-    ys = positions_xyz[:, 1]
-    x_min, x_max = np.percentile(xs, 1), np.percentile(xs, 99)
-    y_min, y_max = np.percentile(ys, 1), np.percentile(ys, 99)
+    hs = positions_xyz[:, h_axis]
+    vs = positions_xyz[:, v_axis]
+    h_min, h_max = np.percentile(hs, 1), np.percentile(hs, 99)
+    v_min, v_max = np.percentile(vs, 1), np.percentile(vs, 99)
 
-    nx = np.clip((xs - x_min) / (x_max - x_min + 1e-8), 0, 1)
-    ny = np.clip((ys - y_min) / (y_max - y_min + 1e-8), 0, 1)
+    nh = np.clip((hs - h_min) / (h_max - h_min + 1e-8), 0, 1)
+    nv = np.clip((vs - v_min) / (v_max - v_min + 1e-8), 0, 1)
 
-    if flip_x:
-        nx = 1.0 - nx
-    if flip_y:
-        ny = 1.0 - ny
+    if flip_h:
+        nh = 1.0 - nh
+    if flip_v:
+        nv = 1.0 - nv
 
-    px = nx * (image_w - 1)
-    py = ny * (image_h - 1)
+    px = nh * (image_w - 1)
+    py = nv * (image_h - 1)
     return np.stack([px, py], axis=1).astype(np.float32)
 
 
@@ -209,8 +215,10 @@ def main():
     parser.add_argument("--face_parse_root", required=True, help="face-parsing.PyTorch のルートパス")
     parser.add_argument("--output_dir", required=True, help="出力ディレクトリ")
     parser.add_argument("--device", default="cuda", help="cuda / cpu")
-    parser.add_argument("--flip_x", action="store_true", help="投影で左右反転する")
-    parser.add_argument("--no_flip_y", action="store_true", help="投影で上下反転しない")
+    parser.add_argument("--h_axis", type=int, default=0, help="横に使う軸 0=x,1=y,2=z（既定 x）")
+    parser.add_argument("--v_axis", type=int, default=2, help="縦に使う軸 0=x,1=y,2=z（既定 z）")
+    parser.add_argument("--flip_h", action="store_true", help="横方向を反転（左右ミラー）")
+    parser.add_argument("--no_flip_v", action="store_true", help="縦方向の反転をやめる")
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -241,10 +249,15 @@ def main():
 
     # 3. Gaussian を 2D 投影してラベル取得
     print("[3/4] Gaussian を 2D 投影してラベル割り当て中...")
+    axis_name = "xyz"
+    print(f"  投影軸: 横={axis_name[args.h_axis]} 縦={axis_name[args.v_axis]} "
+          f"flip_h={args.flip_h} flip_v={not args.no_flip_v}")
     pixel_coords = project_gaussians_to_image(
         positions, image_w, image_h,
-        flip_x=args.flip_x,
-        flip_y=not args.no_flip_y,
+        h_axis=args.h_axis,
+        v_axis=args.v_axis,
+        flip_h=args.flip_h,
+        flip_v=not args.no_flip_v,
     )
     labels = assign_labels(pixel_coords, label_map)
 

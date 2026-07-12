@@ -65,21 +65,26 @@ else:
     print("  no change (already patched or pattern not found)")
 PY
 
-# ---- 1. FaceLift 推論 -------------------------------------------
-echo "[1/3] FaceLift 推論..."
-# メモリ断片化対策（OOM 回避のため）
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-cd FaceLift
-conda run -n "$ENV_NAME" python inference.py \
-  --input_dir ../facelift_input/ \
-  --output_dir ../facelift_output/ \
-  --seed 4 \
-  --guidance_scale_2D 3.0 \
-  --step_2D 50
-cd "$WORKSPACE"
-
-echo "[出力ファイル]"
-find facelift_output/ -type f | sort
+# ---- 1. FaceLift 推論（既存 .ply があればスキップ）--------------
+EXISTING_PLY="$(find facelift_output/ -name '*.ply' 2>/dev/null | head -1)"
+if [ -n "$EXISTING_PLY" ] && [ "${FORCE_INFER:-0}" != "1" ]; then
+  echo "[1/3] 既存 .ply を再利用し推論をスキップ: $EXISTING_PLY"
+  echo "      再推論する場合: FORCE_INFER=1 bash run_pipeline.sh"
+else
+  echo "[1/3] FaceLift 推論..."
+  # メモリ断片化対策（OOM 回避のため）
+  export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+  cd FaceLift
+  conda run -n "$ENV_NAME" python inference.py \
+    --input_dir ../facelift_input/ \
+    --output_dir ../facelift_output/ \
+    --seed 4 \
+    --guidance_scale_2D 3.0 \
+    --step_2D 50
+  cd "$WORKSPACE"
+  echo "[出力ファイル]"
+  find facelift_output/ -type f | sort
+fi
 
 # ---- 2. .ply パス特定 -------------------------------------------
 PLY_PATH="$(find facelift_output/ -name '*.ply' | head -1)"
