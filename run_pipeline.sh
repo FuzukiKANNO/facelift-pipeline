@@ -21,7 +21,6 @@ cd FaceLift
 conda run -n "$ENV_NAME" python inference.py \
   --input_dir ../facelift_input/ \
   --output_dir ../facelift_output/ \
-  --auto_crop True \
   --seed 4 \
   --guidance_scale_2D 3.0 \
   --step_2D 50
