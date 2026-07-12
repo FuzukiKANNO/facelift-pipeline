@@ -32,10 +32,16 @@ source "$(conda info --base)/etc/profile.d/conda.sh"
 
 # ---- 1. conda 環境（Python 3.10）--------------------------------
 banner "1. conda 環境 '$ENV_NAME' (Python 3.10)"
+# 新しい conda では defaults チャンネルの ToS 未承認で create が失敗するため、
+# 念のため承認を試みる（失敗しても無視）。環境自体は conda-forge から作る。
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>/dev/null || true
+conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r    2>/dev/null || true
 if conda env list | grep -qE "^${ENV_NAME}\s"; then
   echo "既存の環境 '$ENV_NAME' を使用します"
 else
-  conda create -n "$ENV_NAME" python=3.10 -y || die "conda create 失敗"
+  # conda-forge から作成（defaults チャンネルの ToS 問題を回避）
+  conda create -n "$ENV_NAME" python=3.10 -c conda-forge --override-channels -y \
+    || die "conda create 失敗（上の conda 出力を確認してください）"
 fi
 conda activate "$ENV_NAME" || die "conda activate 失敗"
 echo "active python: $(which python)"
@@ -77,7 +83,8 @@ fi
 
 # ---- 4. CUDA Toolkit 12.8 + rasterizer ビルド -------------------
 banner "4. diff-gaussian-rasterization を sm_120 向けにビルド"
-conda install -c nvidia cuda-toolkit=12.8 -y || die "cuda-toolkit=12.8 の導入失敗"
+conda install -c nvidia -c conda-forge --override-channels cuda-toolkit=12.8 -y \
+  || die "cuda-toolkit=12.8 の導入失敗"
 export TORCH_CUDA_ARCH_LIST="12.0"
 echo "nvcc: $(which nvcc)  / TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST"
 nvcc --version | tail -2 || true
