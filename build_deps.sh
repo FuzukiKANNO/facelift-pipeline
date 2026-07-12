@@ -39,8 +39,15 @@ fi
 
 # RTX 5090 = sm_120 向けにビルド。詳細ログを出す（失敗時の原因特定用）
 export TORCH_CUDA_ARCH_LIST="12.0"
-echo "TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST  nvcc=$(which nvcc)"
-pip install -v "./$RASTER_DIR" 2>&1 | tee _build/raster_build.log
+# conda の cuda-toolkit を使う。CUDA_HOME 未設定なら conda 環境を指す
+export CUDA_HOME="${CUDA_HOME:-$CONDA_PREFIX}"
+echo "TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST  nvcc=$(which nvcc)  CUDA_HOME=$CUDA_HOME"
+# ビルドに必要なものを現環境に用意
+pip install -U setuptools wheel ninja >/dev/null 2>&1
+# ★ --no-build-isolation: 隔離環境ではなく torch のある現環境でビルドする
+#    （setup.py が torch を import するため。前回の "Getting requirements to
+#      build wheel: error" の原因）
+pip install -v --no-build-isolation "./$RASTER_DIR" 2>&1 | tee _build/raster_build.log
 BUILD_RC=${PIPESTATUS[0]}
 
 if [ "$BUILD_RC" -ne 0 ]; then
