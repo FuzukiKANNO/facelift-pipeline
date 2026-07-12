@@ -125,3 +125,6 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# rasterizer ローカルビルド用
+/_build/
