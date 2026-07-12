@@ -34,6 +34,32 @@ else:
     print("  WARN: 対象行が見つかりません（FaceLift が更新された可能性）")
 PY
 
+# ---- パッチ: GS-LRM の xformers 依存を SDPA に切替 ---------------
+#   gslrm/model/utils_transformer.py は xformers を必須 import し、
+#   use_flashatt_v2 時に flash attention を使う。xformers を任意依存化し、
+#   未導入なら PyTorch SDPA パス（実装済み）を使うようにする。
+echo "[patch] gslrm/model/utils_transformer.py の xformers 依存を SDPA へ..."
+python - <<'PY'
+import re
+p = "FaceLift/gslrm/model/utils_transformer.py"
+s = open(p, encoding="utf-8").read()
+orig = s
+# 1) import 失敗を致命的にしない（raise e → xops = None）
+s = re.sub(
+    r'except ImportError as e:\s*\n\s*print\([^)]*\)\s*\n\s*raise e',
+    'except ImportError:\n    xops = None  # [patched] xformers を任意依存化',
+    s, count=1)
+# 2) xformers 未導入なら SDPA 分岐を使う
+if 'xops is not None' not in s:
+    s = s.replace('if self.use_flashatt_v2:',
+                  'if self.use_flashatt_v2 and xops is not None:', 1)
+if s != orig:
+    open(p, "w", encoding="utf-8").write(s)
+    print("  patched: xformers→SDPA")
+else:
+    print("  no change (already patched or pattern not found)")
+PY
+
 # ---- 1. FaceLift 推論 -------------------------------------------
 echo "[1/3] FaceLift 推論..."
 cd FaceLift
