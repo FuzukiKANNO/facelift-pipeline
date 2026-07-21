@@ -115,8 +115,15 @@ cd facelift-pipeline
 3. 各 3D 粒を写真面に投影し、落ちたピクセルの部位ラベルを付与
 4. ラベルごとに `.ply` を分けて保存
 
-投影軸は **横=X, 縦=Z（Z 反転で頭が上）** が正しい（FaceLift 出力は顔が XZ 平面・Y が奥行き）。
-左右の目が入れ替わる場合は `segment_gaussians.py` に `--flip_h` を付ける。
+投影は **FaceLift の実カメラ**（`FaceLift/utils_folder/opencv_cameras.json` の
+前面 frame=2、OpenCV 透視投影）を使う。BiSeNet は FaceLift がクロップした
+`facelift_output/<名前>/input.png`（＝そのカメラで見た顔）にかけるので、
+粒とラベルのピクセル対応がスケール・位置ともに一致する。
+`run_windows.ps1` が自動でこの設定 (`--camera_json ... --camera_index 2`) を渡す。
+
+> 旧版は「各軸の bbox を正方形に引き伸ばす簡易正射影」で、顔画像とスケールが
+> 合わず大量の粒が誤って `other` に流れていた（既に修正済み）。
+> 実カメラ投影に切替後、`other` は 74,836→9,286 個に激減し各パーツが正しい位置に。
 
 ---
 

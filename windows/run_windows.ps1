@@ -43,11 +43,19 @@ if (-not $ply) { throw "facelift_output に .ply が見つかりません" }
 Write-Host "使用 PLY: $($ply.FullName)"
 
 Write-Host "[2/3] パーツ分割..." -ForegroundColor Cyan
+# BiSeNet は FaceLift がクロップした input.png（Gaussian が対応する前面像）にかける。
+# 投影は簡易 bbox ではなく FaceLift の実カメラ(opencv_cameras.json frame=2 前面)を使う
+# → パーツのスケール・位置が顔画像と正確に一致する。
+$faceImg = Join-Path $ply.DirectoryName "input.png"
+if (-not (Test-Path $faceImg)) { $faceImg = "input/face.jpg" }  # フォールバック
+$camJson = "FaceLift/utils_folder/opencv_cameras.json"
 conda run -n $EnvName --no-capture-output python scripts/segment_gaussians.py `
   --ply_path $ply.FullName `
-  --face_image "input/face.jpg" `
+  --face_image $faceImg `
   --face_parse_root "face-parsing.PyTorch/" `
   --output_dir "segmented_output/" `
+  --camera_json $camJson `
+  --camera_index 2 `
   --device cuda
 
 Write-Host "[3/3] 検証..." -ForegroundColor Cyan
