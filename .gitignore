@@ -11,6 +11,7 @@
 /segmented_output/
 /segmented_fukuwarai/
 /mesh_output/
+/unity_parts/
 *.ply
 *.pth
 *.mp4
