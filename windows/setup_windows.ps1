@@ -1,17 +1,22 @@
-# ============================================================
-# setup_windows.ps1  —  RTX 3070 (Ampere/sm_86) 向け FaceLift 環境
-#   ★ 必ず「Developer PowerShell for VS 2022」から実行してください
-#     （rasterizer のビルドに cl.exe(MSVC) が必要なため）
+﻿# ============================================================
+# setup_windows.ps1  —  RTX 30xx (Ampere/sm_86) 向け FaceLift 環境
+#   FaceLift 公式のテスト済み構成 (torch2.4 + cu124 + xformers) を使用。
 #
 #   事前に手動導入が必要:
 #     - Miniconda
 #     - Git
-#     - Visual Studio Build Tools 2022（C++ によるデスクトップ開発）
+#     - Visual Studio 2022 + 「C++ によるデスクトップ開発」ワークロード
+#       （rasterizer のビルドに cl.exe(MSVC) が必要）
+#     - NVIDIA ドライバ
 #
-#   使い方:
+#   使い方（通常の PowerShell で可。cl.exe は本スクリプトが自動で用意します）:
 #     git clone https://github.com/FuzukiKANNO/facelift-pipeline.git
 #     cd facelift-pipeline
 #     .\windows\setup_windows.ps1
+#
+#   ※ このファイルは UTF-8 (BOM 付き) で保存すること。
+#      Windows PowerShell 5.1 は BOM 無し UTF-8 を ANSI 誤認し、日本語や
+#      ヒアストリングが壊れてパースエラーになるため。
 # ============================================================
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -20,14 +25,41 @@ $EnvName = if ($env:FACELIFT_ENV) { $env:FACELIFT_ENV } else { "facelift" }
 
 function Banner($m){ Write-Host "`n==================================================" -ForegroundColor Cyan; Write-Host ">>> $m" -ForegroundColor Cyan; Write-Host "==================================================" -ForegroundColor Cyan }
 
+# --- conda を PATH に用意（Miniconda を AddToPath 無しで入れていても動くように） ---
+function Ensure-Conda {
+  if (Get-Command conda -ErrorAction SilentlyContinue) { return }
+  $cands = @(
+    "$env:USERPROFILE\miniconda3", "$env:USERPROFILE\Anaconda3",
+    "$env:LOCALAPPDATA\miniconda3", "C:\ProgramData\miniconda3", "C:\ProgramData\Anaconda3"
+  )
+  foreach ($c in $cands) {
+    if (Test-Path "$c\Scripts\conda.exe") {
+      $env:PATH = "$c;$c\Scripts;$c\Library\bin;$env:PATH"
+      return
+    }
+  }
+  throw "conda が見つかりません（Miniconda を導入してください）"
+}
+
+# --- cl.exe(MSVC) を PATH に用意（VS Developer Shell を自動で読み込む） ---
+function Ensure-MSVC {
+  if (Get-Command cl.exe -ErrorAction SilentlyContinue) { return }
+  $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+  if (-not (Test-Path $vswhere)) { Write-Warning "vswhere が無く cl.exe を用意できません。段階5で失敗する可能性。"; return }
+  $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1
+  if (-not $vsPath) { Write-Warning "C++ ツール付き VS が見つかりません。VS Build Tools の C++ ワークロードを入れてください。"; return }
+  Import-Module "$vsPath\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
+  Enter-VsDevShell -VsInstallPath $vsPath -DevCmdArguments "-arch=x64 -host_arch=x64" -SkipAutomaticLocation | Out-Null
+  Set-Location $RepoRoot
+}
+
 Banner "0. 前提チェック"
-if (-not (Get-Command conda -ErrorAction SilentlyContinue)) { throw "conda が見つかりません（Miniconda を導入し Anaconda Prompt から実行）" }
+Ensure-Conda
 if (-not (Get-Command nvidia-smi -ErrorAction SilentlyContinue)) { throw "nvidia-smi が見つかりません（NVIDIA ドライバ未導入）" }
 nvidia-smi --query-gpu=name,memory.total --format=csv
-if (-not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
-  Write-Warning "cl.exe(MSVC) が PATH にありません。段階5のビルドに失敗します。"
-  Write-Warning "『Developer PowerShell for VS 2022』から実行し直してください。"
-}
+Ensure-MSVC
+if (Get-Command cl.exe -ErrorAction SilentlyContinue) { Write-Host "cl.exe OK: $((Get-Command cl.exe).Source)" }
+else { Write-Warning "cl.exe が用意できませんでした。段階5(rasterizer ビルド)で失敗します。" }
 
 Banner "1. conda 環境 ($EnvName, Python 3.10)"
 try { conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>$null } catch {}
@@ -52,7 +84,8 @@ conda run -n $EnvName pip install rembg onnxruntime
 conda run -n $EnvName pip install numpy==1.26.4 matplotlib==3.7.5 scikit-learn==1.3.2 einops==0.8.0 jaxtyping==0.2.19 pytorch-msssim==1.0.0
 conda run -n $EnvName pip install easydict==1.13 pyyaml==6.0.2 wandb==0.19.1 termcolor==2.4.0 plyfile==1.0.3 tqdm gradio==5.49.1
 conda run -n $EnvName pip install videoio==0.3.0 ffmpeg-python==0.2.0 gdown
-conda install -n $EnvName -c conda-forge ffmpeg -y
+# ffmpeg 本体（ffprobe 含む）。--override-channels で defaults を使わず ToS 承認を回避。
+conda install -n $EnvName -c conda-forge --override-channels ffmpeg -y
 
 Banner "4. リポジトリ clone"
 if (-not (Test-Path FaceLift)) { git clone https://github.com/weijielyu/FaceLift.git }
@@ -67,19 +100,16 @@ if (-not (Test-Path $raster)) {
 } else {
   git -C $raster submodule update --init --recursive
 }
-# 新しいコンパイラ対策で <cstdint> を追加（MSVC でも無害）
-conda run -n $EnvName python -c @"
-import os
-root = r'$raster'
-for f in ['rasterizer_impl.h','rasterizer_impl.cu','forward.h','backward.h','auxiliary.h']:
-    p = os.path.join(root,'cuda_rasterizer',f)
-    if not os.path.exists(p): continue
-    s = open(p,encoding='utf-8').read()
-    if '#include <cstdint>' in s: continue
-    s = s.replace('#pragma once','#pragma once\n#include <cstdint>',1) if '#pragma once' in s else '#include <cstdint>\n'+s
-    open(p,'w',encoding='utf-8').write(s); print('patched',p)
-"@
+# <cstdint> 追加パッチ（conda run の -c は複数行不可なのでファイルで実行）
+conda run -n $EnvName python "windows\patch_rasterizer.py" $raster
+
 $env:TORCH_CUDA_ARCH_LIST = "8.6"
+$env:DISTUTILS_USE_SDK = "1"
+# conda 版 CUDA は cudart.lib を <env>\Library\lib に置く（torch は \lib\x64 を探す）。
+# LIB に追加してリンカが cudart.lib を見つけられるようにする。
+$condaPrefix = (conda run -n $EnvName python -c "import sys; print(sys.prefix)").Trim()
+$env:LIB = "$condaPrefix\Library\lib;$env:LIB"
+Write-Host "LIB += $condaPrefix\Library\lib (cudart.lib present: $(Test-Path "$condaPrefix\Library\lib\cudart.lib"))"
 conda run -n $EnvName pip install -v --no-build-isolation ".\$raster"
 conda run -n $EnvName python -c "import diff_gaussian_rasterization; print('rasterizer import OK')"
 

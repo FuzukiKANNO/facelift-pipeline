@@ -26,12 +26,13 @@ Blackwell(5090) 特有の問題・パッチは一切不要です。
 ## 手順
 
 ### 1. リポジトリ取得
-「Developer PowerShell for VS 2022」を**スタートメニューから起動**し（← cl.exe が使える状態）:
+**通常の PowerShell で構いません**（setup が VS の C++ 環境を自動で読み込みます）:
 ```powershell
 cd $HOME
 git clone https://github.com/FuzukiKANNO/facelift-pipeline.git
 cd facelift-pipeline
 ```
+> Miniconda を「AddToPath 無し」で入れていても、setup/run が自動で PATH を通します。
 
 ### 2. セットアップ（環境構築・ビルド・重みDLを自動実行）
 ```powershell
@@ -62,10 +63,15 @@ cd facelift-pipeline
 
 | 症状 | 対処 |
 |------|------|
-| `cl.exe が見つからない`／ビルド失敗 | 「Developer PowerShell for VS 2022」から実行しているか確認。VS Build Tools の C++ ワークロードが入っているか確認 |
-| CUDA out of memory | 他アプリを閉じる。それでもダメなら 8GB では厳しい可能性 |
+| `cl.exe が見つからない`／ビルド失敗 | VS 2022 に「C++ によるデスクトップ開発」ワークロードが入っているか確認（setup が DevShell を自動ロードします） |
+| CUDA out of memory | 他アプリ（Unity/ブラウザ等）を閉じる。それでもダメなら 8GB では厳しい可能性 |
 | スクリプト実行がブロック | `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` |
 | gdown で重みDL失敗 | face-parsing.PyTorch の README から手動DLし `face-parsing.PyTorch\res\cp\79999_iter.pth` に配置 |
+| `turntable.mp4` が出来ない (`ffprobe not found`) | `conda install -n facelift -c conda-forge --override-channels ffmpeg -y` |
+| seg/verify が `cp932` の UnicodeEncodeError | run_windows.ps1 が `PYTHONUTF8=1` を設定済み。手動実行時も同様に設定 |
+
+> **注意**: `windows\*.ps1` は **UTF-8 (BOM 付き)** で保存してください。BOM 無しだと
+> Windows PowerShell 5.1 が ANSI 誤認し、日本語・ヒアストリングが壊れてパースエラーになります。
 
 ---
 

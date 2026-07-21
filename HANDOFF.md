@@ -140,14 +140,29 @@ Get-Content _build\raster_build.log -Raw | Out-File -Encoding utf8 log.txt
 
 ---
 
-## 8. 現在のステータス（2026-07 時点）
+## 8. 現在のステータス（2026-07-21 更新）
 
 - [x] Linux/5090 環境構築（動くが品質問題あり → 保留）
-- [x] Windows/3070 用スクリプト作成（`windows/`）← **未実行・未検証**
-- [ ] Windows/3070 で setup 実行
-- [ ] Windows/3070 で推論 → 品質確認（ぐちゃっと問題が直るか）
-- [ ] パーツ分割 → SuperSplat/Unity で確認
-- [ ] Unity(UnityGaussianSplatting)への取り込み
+- [x] Windows 用スクリプト作成（`windows/`）
+- [x] Windows/Ampere で setup 実行（**実機は RTX 3080 Laptop 8GB / sm_86**）
+- [x] Windows/Ampere で推論 → **品質確認：崩れ問題は解消**（`output.png`/`turntable.mp4` とも綺麗）
+- [x] パーツ分割 → 検証OK（合計 162,606 Gaussians が元PLYと一致）
+- [ ] SuperSplat / Unity(UnityGaussianSplatting) への取り込み
 
-**次にやること**: 新PC(3070/Windows)で「4. 手順」を実行し、`turntable.mp4` の
-品質を確認する。綺麗になっていれば移行成功。
+### ✅ 移行結果（結論）
+Ampere + 公式スタック(torch2.4/cu124/xformers) で **5090 の「3D化で崩れる」問題は解消**。
+HANDOFF の仮説（5090/Blackwell/torch2.11 の数値問題が原因）が裏付けられた。
+
+### セットアップで実際に踏んだ問題と対処（`windows/` に反映済み）
+| 問題 | 対処 |
+|------|------|
+| `.ps1` が BOM 無し UTF-8 で PS5.1 がパース失敗 | **UTF-8(BOM付き)** で保存 |
+| conda が PATH に無い | setup/run 冒頭で Miniconda を自動検出し PATH 追加 |
+| `Developer PowerShell` 以外だと cl.exe が無い | setup が VS DevShell を自動ロード（通常の PowerShell で可） |
+| `conda run python -c "複数行"` がパッチ失敗 | パッチを `windows/patch_rasterizer.py` に分離 |
+| リンクで `cudart.lib` が見つからず失敗 | conda の `<env>\Library\lib` を `LIB` に追加 |
+| `ffprobe not found`（turntable未生成） | `ffmpeg` を `-c conda-forge --override-channels` で導入 |
+| seg/verify が `cp932` で UnicodeEncodeError | run が `PYTHONUTF8=1` を設定 |
+
+**次にやること**: `segmented_output\*.ply` を SuperSplat(https://superspl.at/editor) で確認し、
+Unity(UnityGaussianSplatting) へパーツ別に取り込む。
