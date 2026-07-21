@@ -56,7 +56,8 @@ BISENET_CLASSES = {
 }
 
 # パーツのグループ定義（出力する .ply ファイルに対応）
-PART_GROUPS = {
+# default: 全パーツを網羅（検証で合計が元と一致することを確認できる）
+PART_GROUPS_DEFAULT = {
     "eye_left":   [4],                # 左目
     "eye_right":  [5],                # 右目
     "eyebrow":    [2, 3],             # 眉
@@ -66,6 +67,20 @@ PART_GROUPS = {
     "ear":        [7, 8, 9],          # 耳
     "hair":       [17, 18],           # 髪・帽子
     "other":      [0, 6, 14, 15, 16], # 背景・その他
+}
+
+# fukuwarai: 3D福笑い用。片側ずつ目+眉をまとめた、動かせる部品単位。
+# （左右眉を1つにまとめる意味はないので分離。目と眉は同じ側でまとめる）
+PART_GROUPS_FUKUWARAI = {
+    "eyebrow_eye_right": [5, 3],      # 右目 + 右眉
+    "eyebrow_eye_left":  [4, 2],      # 左目 + 左眉
+    "nose":              [10],        # 鼻
+    "mouth":             [11, 12, 13],# 口・唇
+}
+
+PART_GROUP_PRESETS = {
+    "default":   PART_GROUPS_DEFAULT,
+    "fukuwarai": PART_GROUPS_FUKUWARAI,
 }
 
 
@@ -266,7 +281,12 @@ def main():
                         help="opencv_cameras.json のパス。指定すると実カメラで透視投影する（推奨）")
     parser.add_argument("--camera_index", type=int, default=2,
                         help="使用カメラのフレーム番号。前面ビューは 2（既定）")
+    parser.add_argument("--preset", default="default", choices=list(PART_GROUP_PRESETS.keys()),
+                        help="パーツ構成。default=全網羅 / fukuwarai=目+眉(左右別)・鼻・口")
     args = parser.parse_args()
+
+    part_groups = PART_GROUP_PRESETS[args.preset]
+    print(f"パーツ構成プリセット: {args.preset} -> {list(part_groups.keys())}")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -324,18 +344,18 @@ def main():
 
     # 4. パーツ別 .ply 書き出し
     print("[4/4] パーツ別 .ply 書き出し中...")
-    for part_name, class_ids in PART_GROUPS.items():
+    for part_name, class_ids in part_groups.items():
         mask = np.isin(labels, class_ids)
         output_path = os.path.join(args.output_dir, f"{part_name}.ply")
         save_ply_subset(props, mask, output_path)
 
-    # 未割り当て確認（PART_GROUPS は全19クラスを網羅しているため通常 0）
+    # 未割り当て確認（default は全19クラス網羅で通常 0。fukuwarai は一部のみ抽出のため多い）
     all_assigned = np.zeros(n_total, dtype=bool)
-    for class_ids in PART_GROUPS.values():
+    for class_ids in part_groups.values():
         all_assigned |= np.isin(labels, class_ids)
     unassigned = int((~all_assigned).sum())
     if unassigned > 0:
-        print(f"  [警告] 未割り当て Gaussian: {unassigned}")
+        print(f"  [情報] このプリセットで未抽出の Gaussian: {unassigned:,}")
 
     print("\n[完了] 出力先:", args.output_dir)
     print("Unity の UnityGaussianSplatting で各 .ply を個別にインポートしてください。")

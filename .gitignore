@@ -9,9 +9,13 @@
 /facelift_input/
 /facelift_output/
 /segmented_output/
+/segmented_fukuwarai/
+/mesh_output/
 *.ply
 *.pth
 *.mp4
+*.glb
+*.obj
 
 # 入力画像は各自配置（サンプルを置く場合は個別に -f で追加）
 /input/*.jpg
