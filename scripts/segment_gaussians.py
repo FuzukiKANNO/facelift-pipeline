@@ -78,9 +78,21 @@ PART_GROUPS_FUKUWARAI = {
     "mouth":             [11, 12, 13],# 口・唇
 }
 
+# fukuwarai_split: 目・眉を左右別々の単一パーツに（各々が単一塊できれいにメッシュ化）。
+# 目と眉は空間的に離れた別の塊なので、まとめず分割する方が再構成がきれい。
+PART_GROUPS_FUKUWARAI_SPLIT = {
+    "eye_right":      [5],             # 右目
+    "eye_left":       [4],             # 左目
+    "eyebrow_right":  [3],             # 右眉
+    "eyebrow_left":   [2],             # 左眉
+    "nose":           [10],            # 鼻
+    "mouth":          [11, 12, 13],    # 口・唇
+}
+
 PART_GROUP_PRESETS = {
-    "default":   PART_GROUPS_DEFAULT,
-    "fukuwarai": PART_GROUPS_FUKUWARAI,
+    "default":         PART_GROUPS_DEFAULT,
+    "fukuwarai":       PART_GROUPS_FUKUWARAI,
+    "fukuwarai_split": PART_GROUPS_FUKUWARAI_SPLIT,
 }
 
 

@@ -78,6 +78,8 @@ def main():
                     help="原点に合わせる基準（既定 median=外れ値に強い）")
     ap.add_argument("--no_clean", action="store_true",
                     help="floater(誤割当の浮いたスプラット)除去を無効化")
+    ap.add_argument("--max_scale_ratio", type=float, default=6.0,
+                    help="実スケール中央値のこの倍を超える巨大スプラットを除去(0で無効)。滲み対策")
     args = ap.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -106,6 +108,17 @@ def main():
             keep = np.ones(len(xyz_full), dtype=bool)
         else:
             keep = clean_mask(xyz_full)
+
+        # 巨大スプラット除去: 極端に引き伸ばされた/大きい Gaussian は尾を引いて滲むので落とす。
+        # scale は log 保存なので実スケール = exp(scale)。中央値の K 倍超を除去。
+        if not args.no_clean and args.max_scale_ratio > 0 and "scale_0" in names:
+            sc = np.stack([v["scale_0"], v["scale_1"], v["scale_2"]], 1).astype(np.float32)
+            real = np.exp(sc)
+            smax = real.max(axis=1)
+            med = np.median(smax[keep]) if keep.any() else np.median(smax)
+            big = smax > med * args.max_scale_ratio
+            keep = keep & (~big)
+
         n_removed = int((~keep).sum())
         xyz = xyz_full[keep]
         if len(xyz) == 0:

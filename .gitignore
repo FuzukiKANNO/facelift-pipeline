@@ -10,8 +10,11 @@
 /facelift_output/
 /segmented_output/
 /segmented_fukuwarai/
+/segmented_split/
 /mesh_output/
 /unity_parts/
+/textured_parts/
+/textured_split/
 *.ply
 *.pth
 *.mp4
