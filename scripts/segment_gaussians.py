@@ -295,6 +295,8 @@ def main():
                         help="使用カメラのフレーム番号。前面ビューは 2（既定）")
     parser.add_argument("--preset", default="default", choices=list(PART_GROUP_PRESETS.keys()),
                         help="パーツ構成。default=全網羅 / fukuwarai=目+眉(左右別)・鼻・口")
+    parser.add_argument("--dilate_px", type=int, default=0,
+                        help="各パーツ領域をこのピクセル数だけ膨張して周囲を含める（目を広く等）。0で無効")
     args = parser.parse_args()
 
     part_groups = PART_GROUP_PRESETS[args.preset]
@@ -356,8 +358,23 @@ def main():
 
     # 4. パーツ別 .ply 書き出し
     print("[4/4] パーツ別 .ply 書き出し中...")
+    # 膨張用にピクセル座標を用意
+    px_i = np.clip(pixel_coords[:, 0].astype(int), 0, image_w - 1)
+    py_i = np.clip(pixel_coords[:, 1].astype(int), 0, image_h - 1)
+    inb = (pixel_coords[:, 0] >= 0) & (pixel_coords[:, 0] < image_w) & \
+          (pixel_coords[:, 1] >= 0) & (pixel_coords[:, 1] < image_h)
+    if 'valid' in dir():
+        inb = inb & valid
     for part_name, class_ids in part_groups.items():
-        mask = np.isin(labels, class_ids)
+        if args.dilate_px > 0:
+            # クラス領域を画像上で膨張 → その領域に落ちる Gaussian を採用（周囲を含める）
+            cmask = np.isin(label_map, class_ids).astype(np.uint8)
+            k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
+                                          (2 * args.dilate_px + 1, 2 * args.dilate_px + 1))
+            dmask = cv2.dilate(cmask, k) > 0
+            mask = inb & dmask[py_i, px_i]
+        else:
+            mask = np.isin(labels, class_ids)
         output_path = os.path.join(args.output_dir, f"{part_name}.ply")
         save_ply_subset(props, mask, output_path)
 

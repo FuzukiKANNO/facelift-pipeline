@@ -39,7 +39,7 @@ def clean_mask(xyz):
     return m
 
 
-def build(name, ply, cam, tex_bgr, depth, dq, smooth):
+def build(name, ply, cam, tex_bgr, depth, dq, smooth, fill_holes=0.0):
     fx, fy, cx, cy = cam["fx"], cam["fy"], cam["cx"], cam["cy"]
     W, H = int(cam.get("w", 512)), int(cam.get("h", 512))
     w2c = np.array(cam["w2c"], float)
@@ -62,6 +62,15 @@ def build(name, ply, cam, tex_bgr, depth, dq, smooth):
         mesh.remove_triangles_by_mask(tclu != int(ntri.argmax())); mesh.remove_unreferenced_vertices()  # 最大成分のみ
     if smooth > 0:
         mesh = mesh.filter_smooth_taubin(number_of_iterations=smooth)
+    # 小さな穴（鼻孔など）を塞ぐ。外周(大きな境界)は残すよう hole_size を制限。
+    if fill_holes > 0:
+        try:
+            diag0 = float(np.linalg.norm(np.asarray(mesh.get_max_bound()) - np.asarray(mesh.get_min_bound())))
+            tm = o3d.t.geometry.TriangleMesh.from_legacy(mesh)
+            tm = tm.fill_holes(hole_size=diag0 * fill_holes)
+            mesh = tm.to_legacy()
+        except Exception as e:
+            print(f"  [warn] fill_holes skipped: {e}")
     mesh.compute_vertex_normals()
 
     V = np.asarray(mesh.vertices); T = np.asarray(mesh.triangles)
@@ -130,8 +139,10 @@ def main():
     ap.add_argument("--output_dir", required=True)
     ap.add_argument("--parts", nargs="*", default=None)
     ap.add_argument("--depth", type=int, default=9)
-    ap.add_argument("--density_quantile", type=float, default=0.2)
+    ap.add_argument("--density_quantile", type=float, default=0.1)
     ap.add_argument("--smooth_iters", type=int, default=15)
+    ap.add_argument("--fill_holes", type=float, default=0.0,
+                    help="小さな穴を塞ぐ最大境界長（bbox対角比）。0で無効（外周まで塞ぐと壊れるため既定OFF）")
     args = ap.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -150,7 +161,7 @@ def main():
         name = os.path.splitext(os.path.basename(ply))[0]
         if not os.path.exists(ply):
             print(f"[skip] {name}: なし"); continue
-        r = build(name, ply, cam, tex, args.depth, args.density_quantile, args.smooth_iters)
+        r = build(name, ply, cam, tex, args.depth, args.density_quantile, args.smooth_iters, args.fill_holes)
         if r is None:
             continue
         mesh, centroid, bbox, nv, nt, unity = r

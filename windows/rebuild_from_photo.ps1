@@ -75,7 +75,7 @@ Stage "2. Segment parts ($Preset)" {
   conda run -n $EnvName --no-capture-output python scripts/segment_gaussians.py `
     --ply_path $ply.FullName --face_image $texture --face_parse_root "face-parsing.PyTorch/" `
     --output_dir "segmented_split/" --camera_json $CamJson --camera_index 2 `
-    --preset $Preset --device cuda
+    --preset $Preset --dilate_px 8 --device cuda
 }
 
 # 3) テクスチャメッシュ生成（obj + meshdata.json + tex.png）
