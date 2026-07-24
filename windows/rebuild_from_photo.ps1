@@ -8,7 +8,7 @@
 #   任意:
 #     -Photo <path>            入力写真（既定 input\face.jpg）
 #     -UnityProject <path>     Unityプロジェクト（既定 C:\Users\fuzuk\FukuwaraiXR）
-#     -Preset <name>           分割プリセット（既定 fukuwarai_split）
+#     -Preset <name>           分割プリセット（既定 fukuwarai=目+眉まとめ左右別・鼻・口）
 #     -SkipInfer               推論をスキップ（既存 .ply を再利用）
 #     -SkipUnity               Unity のメッシュ/シーン構築をスキップ
 #
@@ -19,7 +19,7 @@
 param(
   [string]$Photo = "input\face.jpg",
   [string]$UnityProject = "C:\Users\fuzuk\FukuwaraiXR",
-  [string]$Preset = "fukuwarai_split",
+  [string]$Preset = "fukuwarai",
   [switch]$SkipInfer,
   [switch]$SkipUnity
 )
@@ -70,12 +70,14 @@ $texture = Join-Path $faceDir "input.png"
 Write-Host "PLY: $($ply.FullName)"
 Write-Host "TEX: $texture"
 
-# 2) パーツ分割（fukuwarai_split）
+# 2) パーツ分割（目+眉まとめ左右別・鼻・口。dilateで目と眉を連結）
+# 古いパーツが混ざらないよう作業ディレクトリを掃除
+Remove-Item -Recurse -Force segmented_split, textured_split -ErrorAction SilentlyContinue
 Stage "2. Segment parts ($Preset)" {
   conda run -n $EnvName --no-capture-output python scripts/segment_gaussians.py `
     --ply_path $ply.FullName --face_image $texture --face_parse_root "face-parsing.PyTorch/" `
     --output_dir "segmented_split/" --camera_json $CamJson --camera_index 2 `
-    --preset $Preset --dilate_px 8 --device cuda
+    --preset $Preset --dilate_px 12 --device cuda
 }
 
 # 3) テクスチャメッシュ生成（obj + meshdata.json + tex.png）
