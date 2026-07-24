@@ -1,0 +1,29 @@
+# Unity generated / cache
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+.vs/
+*.csproj
+*.sln
+*.user
+*.unityproj
+*.booproj
+*.pidb
+*.suo
+
+# パイプラインが生成する顔パーツデータ・シーン（rebuild / Fukuwarai メニューで再生成）
+/Assets/FaceParts/MeshData/
+/Assets/FaceParts/MeshData.meta
+/Assets/FaceParts/Source/
+/Assets/FaceParts/Source.meta
+/Assets/FaceParts/Assets/
+/Assets/FaceParts/Assets.meta
+/Assets/FaceParts/Meshes/
+/Assets/FaceParts/Meshes.meta
+/Assets/Scenes/
+/Assets/Scenes.meta

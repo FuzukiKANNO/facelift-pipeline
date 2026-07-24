@@ -165,7 +165,15 @@ def main():
 
     with open(os.path.join(args.output_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
-    print(f"\n完了: {args.output_dir}（{len(manifest['parts'])} パーツ + manifest.json）")
+
+    # Unity(FukuwaraiSetup)用 scene_config.json も出力
+    scene = {"parts": [{"name": n,
+                        "offset": info["centroid_offset"],
+                        "bbox": info["bbox_size"]}
+                       for n, info in manifest["parts"].items()]}
+    with open(os.path.join(args.output_dir, "scene_config.json"), "w", encoding="utf-8") as f:
+        json.dump(scene, f, ensure_ascii=False, indent=2)
+    print(f"\n完了: {args.output_dir}（{len(manifest['parts'])} パーツ + manifest.json + scene_config.json）")
 
 
 if __name__ == "__main__":

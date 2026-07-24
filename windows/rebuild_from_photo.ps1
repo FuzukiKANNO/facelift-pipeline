@@ -7,7 +7,7 @@
 #     .\windows\rebuild_from_photo.ps1
 #   任意:
 #     -Photo <path>            入力写真（既定 input\face.jpg）
-#     -UnityProject <path>     Unityプロジェクト（既定 C:\Users\fuzuk\FukuwaraiXR）
+#     -UnityProject <path>     Unityプロジェクト（既定: リポ同梱 unity\FukuwaraiXR）
 #     -Preset <name>           分割プリセット（既定 fukuwarai=目+眉まとめ左右別・鼻・口）
 #     -SkipInfer               推論をスキップ（既存 .ply を再利用）
 #     -SkipUnity               Unity のメッシュ/シーン構築をスキップ
@@ -18,7 +18,7 @@
 # ============================================================
 param(
   [string]$Photo = "input\face.jpg",
-  [string]$UnityProject = "C:\Users\fuzuk\FukuwaraiXR",
+  [string]$UnityProject = "",
   [string]$Preset = "fukuwarai",
   [switch]$SkipInfer,
   [switch]$SkipUnity
@@ -26,6 +26,8 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $RepoRoot
+# 既定はリポ同梱の Unity プロジェクト（clone だけで再現できるように相対パス）
+if (-not $UnityProject) { $UnityProject = Join-Path $RepoRoot "unity\FukuwaraiXR" }
 $EnvName = if ($env:FACELIFT_ENV) { $env:FACELIFT_ENV } else { "facelift" }
 $UnityExe = "C:\Program Files\Unity\Hub\Editor\6000.3.19f1\Editor\Unity.exe"
 $CamJson = "FaceLift/utils_folder/opencv_cameras.json"
@@ -80,37 +82,51 @@ Stage "2. Segment parts ($Preset)" {
     --preset $Preset --dilate_px 12 --device cuda
 }
 
-# 3) テクスチャメッシュ生成（obj + meshdata.json + tex.png）
-Stage "3. Textured mesh + Unity data" {
+# 3) テクスチャメッシュ生成（写真テクスチャ版：obj + meshdata.json + tex.png）
+Stage "3. Textured mesh (photo)" {
   conda run -n $EnvName --no-capture-output python scripts/gs_parts_to_textured_mesh.py `
     --parts_dir "segmented_split" --camera_json $CamJson --camera_index 2 `
     --texture $texture --output_dir "textured_split"
 }
 
-# 4) Unity プロジェクトへコピー
+# 3b) GS 版パーツ（立体保持：重心原点に再センタリング＋scene_config）
+Stage "3b. Gaussian Splat parts" {
+  conda run -n $EnvName --no-capture-output python scripts/recenter_gs_parts.py `
+    --parts_dir "segmented_split" --output_dir "unity_parts"
+}
+
+# 4) Unity プロジェクトへコピー（写真テクスチャ版=MeshData / GS版=Source）
 Stage "4. Copy parts to Unity project" {
-  $dst = Join-Path $UnityProject "Assets\FaceParts\MeshData"
-  New-Item -ItemType Directory -Force $dst | Out-Null
+  $meshDst = Join-Path $UnityProject "Assets\FaceParts\MeshData"
+  New-Item -ItemType Directory -Force $meshDst | Out-Null
   Get-ChildItem "textured_split" -Directory | ForEach-Object {
     $nm = $_.Name
-    $pdst = Join-Path $dst $nm; New-Item -ItemType Directory -Force $pdst | Out-Null
+    $pdst = Join-Path $meshDst $nm; New-Item -ItemType Directory -Force $pdst | Out-Null
     Copy-Item -Force (Join-Path $_.FullName "$nm.meshdata.json") $pdst
     Copy-Item -Force (Join-Path $_.FullName "${nm}_tex.png") $pdst
   }
-  Write-Host "copied to $dst"
+  $gsDst = Join-Path $UnityProject "Assets\FaceParts\Source"
+  New-Item -ItemType Directory -Force $gsDst | Out-Null
+  Copy-Item -Force "unity_parts\*.ply" $gsDst
+  Copy-Item -Force "unity_parts\scene_config.json" $gsDst
+  Write-Host "copied mesh->$meshDst  GS->$gsDst"
 }
 
-# 5) Unity でメッシュ生成 + シーン構築（batchmode）
+# 5) Unity でシーン構築（GS版 と 写真テクスチャ版 の両方）
 if (-not $SkipUnity) {
   if (-not (Test-Path $UnityExe)) { Write-Warning "Unity 実行体が見つかりません: $UnityExe（Unity段はスキップ）" }
   else {
-    Stage "5. Unity build (meshes + scene)" {
+    Stage "5. Unity build (GS + mesh scenes)" {
       $ulog = Join-Path $env:TEMP "fukuwarai_unity_build.log"
-      # Start-Process -Wait で Unity 終了まで確実にブロック（時間計測を正確に）
-      $proc = Start-Process -FilePath $UnityExe -Wait -PassThru -NoNewWindow -ArgumentList @(
+      $p1 = Start-Process -FilePath $UnityExe -Wait -PassThru -NoNewWindow -ArgumentList @(
         "-batchmode","-quit","-projectPath",$UnityProject,
-        "-executeMethod","FukuwaraiMeshBuilder.Build","-logFile",$ulog)
-      if ($proc.ExitCode -ne 0) { Write-Warning "Unity build 失敗（プロジェクトを閉じているか確認）。ログ: $ulog" }
+        "-executeMethod","FukuwaraiSetup.BuildAll","-logFile",$ulog)
+      if ($p1.ExitCode -ne 0) { Write-Warning "GS scene build 失敗。ログ: $ulog" }
+      $ulog2 = Join-Path $env:TEMP "fukuwarai_unity_build2.log"
+      $p2 = Start-Process -FilePath $UnityExe -Wait -PassThru -NoNewWindow -ArgumentList @(
+        "-batchmode","-quit","-projectPath",$UnityProject,
+        "-executeMethod","FukuwaraiMeshBuilder.Build","-logFile",$ulog2)
+      if ($p2.ExitCode -ne 0) { Write-Warning "mesh scene build 失敗。ログ: $ulog2" }
     }
   }
 }

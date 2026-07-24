@@ -3,8 +3,32 @@
 1枚の顔画像から FaceLift で 3D Gaussian Splatting (.ply) を生成し、BiSeNet の
 顔パース結果を使ってパーツ別 .ply に分割する一式です。
 
-> **重要**: FaceLift は CUDA (NVIDIA GPU) 必須です。この一式は Windows PC 側で
-> 準備し、**Linux + NVIDIA GPU マシンに転送して実行**する前提で作られています。
+> **重要**: FaceLift は CUDA (NVIDIA GPU) 必須です。
+
+---
+
+## クイックスタート（Windows / RTX 30xx, 現行の主ワークフロー）
+
+前提を一度だけ用意（[windows/README_windows.md](windows/README_windows.md) 参照）:
+Miniconda / Git / Visual Studio 2022(C++) / NVIDIA ドライバ / **Unity 6000.3.19f1**。
+
+```powershell
+# 1) 環境構築（conda環境・依存・rasterizerビルド・重みDL）
+.\windows\setup_windows.ps1
+# 2) 顔写真を input\face.jpg に配置
+# 3) 写真1枚から 3DGS→パーツ分割→テクスチャメッシュ→Unity配置/シーン構築 を一括
+rebuild.bat        # ダブルクリックでも可（Unityは閉じておく）
+```
+
+- 生成される Unity プロジェクトは **リポ同梱の [unity/FukuwaraiXR](unity/FukuwaraiXR)**
+  （clone だけで再現。Unity Hub で `unity/FukuwaraiXR` を開く）。
+- Unity メニュー **Fukuwarai** から 2 方式を生成できる:
+  - **★ 3DGS版**（立体・視点依存の見た目を保持。UnityGaussianSplatting）
+  - **★ 写真テクスチャ版**（Poissonメッシュ＋実写。標準Unityで扱いやすい）
+- 生成物（パーツデータ・シーン）は gitignore 対象で、`rebuild.bat` かメニューで再生成。
+
+> 経緯・設計・トラブル対処の詳細は [HANDOFF.md](HANDOFF.md) を参照。
+> 以下は初期の Linux(5090) 向け記述（参考・保持）。
 
 ---
 
