@@ -15,6 +15,7 @@
 /unity_parts/
 /textured_parts/
 /textured_split/
+/textured_fukuwarai/
 *.ply
 *.pth
 *.mp4
